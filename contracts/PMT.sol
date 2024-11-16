@@ -59,11 +59,9 @@ contract PMT is ERC1155, Ownable {
     }
 
     /* <<=== LIQUIDITY MANAGER ===>> */
-
     function addInitLiqidity(uint256 amount) external {
         require(!initLiquidityFlag, "Initial liquidity already added.");
         require(amount >= 10, "Amount for each option must be greater than zero.");
-        // require(amounts.length == options.length, "Amounts must match options count.");
 
         collateralPoolBalance = amount;
         for (uint256 i = 0; i < options.length; i++) {
@@ -77,36 +75,6 @@ contract PMT is ERC1155, Ownable {
             "Collateral token transfer failed"
         );
         initLiquidityFlag = true;
-    }
-
-    // 任意の選択肢トークンに分割
-    function split(uint256 collateralTokenId, uint256 amount, uint256[] calldata optionIds) external isStarted {
-        require(optionIds.length > 1, "Must have more than one option to split");
-
-        _burn(msg.sender, collateralTokenId, amount);
-
-        uint256 perOptionAmount = amount / optionIds.length;
-        for (uint256 i = 0; i < optionIds.length; i++) {
-            require(bytes(options[optionIds[i]]).length > 0, "Invalid option ID");
-            _mint(msg.sender, optionIds[i], perOptionAmount, "");
-        }
-    }
-
-    // 任意の選択肢トークンから担保トークンに統合
-    function merge(uint256[] calldata optionIds, uint256 collateralTokenId, uint256 amount) external isStarted {
-        require(optionIds.length > 1, "Must have more than one option to merge");
-
-        uint256 perOptionAmount = amount / optionIds.length;
-        for (uint256 i = 0; i < optionIds.length; i++) {
-            require(bytes(options[optionIds[i]]).length > 0, "Invalid option ID");
-            _burn(msg.sender, optionIds[i], perOptionAmount);
-        }
-        _mint(msg.sender, collateralTokenId, amount, "");
-    }
-
-    // (期日前)償還
-    function redeem() external isStarted {
-
     }
 
     /* <<=== TRADING MANAGER ===>> */

@@ -15,57 +15,8 @@ contract OptionMarket {
         // Handle the token transfer
         return this.onERC1155Received.selector;
     }
-    // 購入ロジック
+
 	// CPMMを使用して動的価格を算出
-    // function buyOption(address target, uint256 opt, uint256 dx) public returns (uint256 acquiredOptions) {
-	// 	IPMT t = IPMT(target);
-    //     require(opt < t.getOptions().length, "Invalid option selected");
-    //     require(dx > 0, "Deposit amount must be greater than zero");
-
-    //     uint256 collateralBalanceBefore = t.getBalanceOfCollateralPool();
-    //     uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
-
-    //     uint256 k = collateralBalanceBefore * optionBalanceBefore;
-
-    //     uint256 collateralAfter = collateralBalanceBefore + dx;
-    //     uint256 optionBalanceAfter = k / collateralAfter;
-
-    //     acquiredOptions = optionBalanceBefore - optionBalanceAfter;
-
-	// 	t.setBalanceCollateralPool(collateralAfter);
-	// 	t.setBalanceOfOptionPool(opt, optionBalanceAfter);
-
-    //     // 購入したオプションをmintしてユーザーに送る
-    //     t.mintHandler(opt, acquiredOptions);
-	// 	t.safeTransferFrom(target, msg.sender, opt, acquiredOptions, "");
-    //     return acquiredOptions;
-    // }
-
-    // // 売却ロジック
-    // function sellOption(address target, uint256 opt, uint256 dx) public returns (uint256 acquiredOptions) {
-	// 	IPMT t = IPMT(target);
-    //     require(opt < t.getOptions().length, "Invalid option selected");
-    //     require(dx > 0, "Deposit amount must be greater than zero");
-
-    //     uint256 collateralBalanceBefore = t.getBalanceOfCollateralPool();
-    //     uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
-	
-    //     uint256 k = collateralBalanceBefore * optionBalanceBefore;
-
-    //     uint256 collateralAfter = collateralBalanceBefore - dx;
-    //     uint256 optionBalanceAfter = k / collateralAfter;
-
-    //     acquiredOptions = optionBalanceBefore - optionBalanceAfter;
-
-	// 	t.setBalanceCollateralPool(collateralAfter);
-	// 	t.setBalanceOfOptionPool(opt, optionBalanceAfter);
-
-    //     // 売却したオプションをburnしてユーザーから引き取る
-	// 	t.safeTransferFrom(msg.sender, target, opt, acquiredOptions, "");
-    //     t.burnHandler(opt, acquiredOptions);
-    //     return acquiredOptions;
-    // }
-
 	function calculateOptionChange(
 		address target, 
 		uint256 opt, 
@@ -105,29 +56,39 @@ contract OptionMarket {
         require(dx > 0, "Deposit amount must be greater than zero");
         
 		uint256 collateralBalanceBefore = t.getBalanceOfCollateralPool();
-        uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
+		uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
 
-        uint256 k = collateralBalanceBefore * optionBalanceBefore;
+		uint256 k = collateralBalanceBefore * optionBalanceBefore;
+		uint256 collateralAfter;
+		uint256 optionBalanceAfter;
 
-        // `isBuy` によってコラテラルの増減を決定
-        uint256 collateralAfter = isBuy ? collateralBalanceBefore + dx : collateralBalanceBefore - dx;
-        uint256 optionBalanceAfter = k / collateralAfter;
+		if (isBuy) {
+			collateralAfter = collateralBalanceBefore + dx;
+			optionBalanceAfter = k / collateralAfter;
+			acquiredOptions = optionBalanceBefore - optionBalanceAfter;
 
-        acquiredOptions = optionBalanceBefore - optionBalanceAfter;
+			t.setBalanceCollateralPool(collateralAfter);
+			t.setBalanceOfOptionPool(opt, optionBalanceAfter);
 
-        t.setBalanceCollateralPool(collateralAfter);
-        t.setBalanceOfOptionPool(opt, optionBalanceAfter);
-
-        // オプションのmint / burn 処理
-        if (isBuy) {
-            t.mintHandler(opt, acquiredOptions);
+			// オプションをmintして購入者に渡す
+			t.mintHandler(opt, acquiredOptions);
 			t.setUserTokenBalances(msg.sender, opt, acquiredOptions);
-        } else {
-			console.log("<HELLO>");
-			t.setUserTokenBalances(msg.sender, opt, acquiredOptions);
-            t.burnHandler(opt, acquiredOptions);
-        }
 
+		} else {
+			require(dx <= optionBalanceBefore, "Insufficient options in pool");
+			require(collateralAfter > 0, "Invalid collateral state after transaction");
+
+			optionBalanceAfter = optionBalanceBefore + dx;
+			collateralAfter = k / optionBalanceAfter;
+			acquiredOptions = collateralBalanceBefore - collateralAfter;
+
+			t.setBalanceCollateralPool(collateralAfter);
+			t.setBalanceOfOptionPool(opt, optionBalanceAfter);
+
+			// オプションを焼却しコラテラルを払い戻す
+			t.setUserTokenBalances(msg.sender, opt, dx);
+			t.burnHandler(opt, dx);
+    	}
         return acquiredOptions;
     }
 
