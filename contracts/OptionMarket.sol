@@ -5,6 +5,8 @@ import "./interface/IPMT.sol";
 import "hardhat/console.sol";
 
 contract OptionMarket {
+	uint256 constant SCALE = 10**18;
+
 	function onERC1155Received(
         address operator,
         address from,
@@ -22,7 +24,7 @@ contract OptionMarket {
 		uint256 opt, 
 		uint256 dx, 
 		bool isBuy
-	) external view returns (uint256 acquiredOptions, uint256 newCollateralBalance, uint256 newOptionBalance) {
+	) external view returns (uint256 dy, uint256 newCollateralBalance, uint256 newOptionBalance) {
 		IPMT t = IPMT(target);
 		require(opt < t.getOptions().length, "Invalid option selected");
 		require(dx > 0, "Deposit amount must be greater than zero");
@@ -30,34 +32,6 @@ contract OptionMarket {
 		uint256 collateralBalanceBefore = t.getBalanceOfCollateralPool();
 		uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
 		
-		require(collateralBalanceBefore > 0 && optionBalanceBefore > 0, "Invalid pool balances");
-		
-		uint256 k = collateralBalanceBefore * optionBalanceBefore;
-		uint256 collateralAfter = isBuy ? collateralBalanceBefore + dx : collateralBalanceBefore - dx;
-
-		// 売却時にdxがコラテラルバランスを超えないことを確認
-		if (!isBuy) {
-			require(dx <= collateralBalanceBefore, "Insufficient collateral in pool");
-		}
-
-		uint256 optionBalanceAfter = k / collateralAfter;
-		acquiredOptions = optionBalanceBefore - optionBalanceAfter;
-		return (acquiredOptions, collateralAfter, optionBalanceAfter);
-	}
-
-    function _adjustOption(
-        address target, 
-        uint256 opt, 
-        uint256 dx, 
-        bool isBuy
-    ) internal returns (uint256 acquiredOptions) {
-        IPMT t = IPMT(target);
-        require(opt < t.getOptions().length, "Invalid option selected");
-        require(dx > 0, "Deposit amount must be greater than zero");
-        
-		uint256 collateralBalanceBefore = t.getBalanceOfCollateralPool();
-		uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
-
 		uint256 k = collateralBalanceBefore * optionBalanceBefore;
 		uint256 collateralAfter;
 		uint256 optionBalanceAfter;
@@ -65,31 +39,76 @@ contract OptionMarket {
 		if (isBuy) {
 			collateralAfter = collateralBalanceBefore + dx;
 			optionBalanceAfter = k / collateralAfter;
-			acquiredOptions = optionBalanceBefore - optionBalanceAfter;
-
-			t.setBalanceCollateralPool(collateralAfter);
-			t.setBalanceOfOptionPool(opt, optionBalanceAfter);
-
-			// オプションをmintして購入者に渡す
-			t.mintHandler(opt, acquiredOptions);
-			t.setUserTokenBalances(msg.sender, opt, acquiredOptions);
-
+			dy = optionBalanceBefore - optionBalanceAfter;
 		} else {
 			require(dx <= optionBalanceBefore, "Insufficient options in pool");
-			require(collateralAfter > 0, "Invalid collateral state after transaction");
 
 			optionBalanceAfter = optionBalanceBefore + dx;
-			collateralAfter = k / optionBalanceAfter;
-			acquiredOptions = collateralBalanceBefore - collateralAfter;
+			
+			uint256 temp = k / optionBalanceAfter;
+			uint256 remainder = k % optionBalanceAfter;
+			uint256 roundValue = (2 * remainder >= optionBalanceAfter) ? (temp + 1) : temp;
+			collateralAfter = roundValue;
+
+			dy = collateralBalanceBefore - collateralAfter;
+		}
+		return (dy, collateralAfter, optionBalanceAfter);
+	}
+
+    function _adjustOption(
+        address target, 
+        uint256 opt, 
+        uint256 dx, 
+        bool isBuy
+    ) internal returns (uint256 dy) {
+        IPMT t = IPMT(target);
+        require(opt < t.getOptions().length, "Invalid option selected");
+        require(dx > 0, "Deposit amount must be greater than zero");
+        
+		uint256 collateralBalanceBefore = t.getBalanceOfCollateralPool();
+		uint256 optionBalanceBefore = t.getBalanceOfOptionPool(opt);
+
+		// uint256[] memory ks;
+		// for (uint256 i = 0; i < t.getOptions().length; i++) {
+		// 	ks[i] = collateralBalanceBefore * t.getBalanceOfOptionPool(i + 1);
+		// }
+
+		uint256 k = collateralBalanceBefore * optionBalanceBefore;
+		uint256 collateralAfter;
+		uint256 optionBalanceAfter;
+
+		if (isBuy) {
+			require(t.getUserCollateralDeposits(msg.sender) == dx, "Deposit amount does not match.");
+
+			collateralAfter = collateralBalanceBefore + dx;
+			optionBalanceAfter = k / collateralAfter;
+			dy = optionBalanceBefore - optionBalanceAfter;
+
+			// t.depositHandler(dx);
+			t.setBalanceCollateralPool(collateralAfter);
+			t.setBalanceOfOptionPool(opt, optionBalanceAfter);
+			t.setUserTokenBalances(msg.sender, opt, dy);
+			t.setUserCollateralDeposits(msg.sender, 0);
+		} else {
+			require(dx <= optionBalanceBefore, "Insufficient options in pool");
+
+			optionBalanceAfter = optionBalanceBefore + dx;
+
+			uint256 temp = k / optionBalanceAfter;
+			uint256 remainder = k % optionBalanceAfter;
+			uint256 roundValue = (2 * remainder >= optionBalanceAfter) ? (temp + 1) : temp;  // 四捨五入
+			collateralAfter = roundValue;
+
+			dy = collateralBalanceBefore - collateralAfter;
 
 			t.setBalanceCollateralPool(collateralAfter);
 			t.setBalanceOfOptionPool(opt, optionBalanceAfter);
-
-			// オプションを焼却しコラテラルを払い戻す
+		
 			t.setUserTokenBalances(msg.sender, opt, dx);
-			t.burnHandler(opt, dx);
+			t.redeemHandler(dy);
+			// t.burnHandler(opt, dx);
     	}
-        return acquiredOptions;
+        return dy;
     }
 
 	function buyOption(address target, uint256 opt, uint256 dx) public returns (uint256 acquiredOptions) {

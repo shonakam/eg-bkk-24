@@ -22,6 +22,8 @@ contract PMT is ERC1155, Ownable {
     // トークンのユーザーおよびプールの保有量を管理するマッピング
     mapping(address => mapping(uint256 => uint256)) public userTokenBalances;
     mapping(uint256 => uint256) public optionPoolBalances;  // オプショントークンのプール
+    mapping(address => uint256) public userDepositsCollateralObserver;
+    mapping(address => mapping(uint256 => uint256)) public userDepositsOptionObserver;
 
     constructor(
         string memory _question,
@@ -74,6 +76,7 @@ contract PMT is ERC1155, Ownable {
             IERC20(collateralToken).transferFrom(msg.sender, address(this), collateralPoolBalance),
             "Collateral token transfer failed"
         );
+        console.log("<HI>");
         initLiquidityFlag = true;
     }
 
@@ -90,6 +93,21 @@ contract PMT is ERC1155, Ownable {
         optionPoolBalances[opt] -= amount; 
     }
 
+    function redeemHandler(uint256 dy) external onlyAllowedContract {
+        require(
+            IERC20(collateralToken).transferFrom(address(this), msg.sender, dy),
+            "Collateral token transfer failed"
+        );
+    }
+
+    function depositHandler(uint256 amount) external onlyAllowedContract {
+        require(
+            IERC20(collateralToken).transferFrom(msg.sender, address(this), amount),
+            "Collateral token transfer failed"
+        );
+        userDepositsCollateralObserver[msg.sender] += amount;
+    }
+
     /* <<===  SETTER FUNCTIONS  ===>> */
     function setBalanceOfOptionPool(uint256 opt, uint256 amount) external onlyAllowedContract {
         optionPoolBalances[opt] = amount;
@@ -99,9 +117,17 @@ contract PMT is ERC1155, Ownable {
         collateralPoolBalance = amount;
     }
 
-   function setUserTokenBalances(address user, uint256 opt, uint256 amount) external onlyAllowedContract {
+    function setUserTokenBalances(address user, uint256 opt, uint256 amount) external onlyAllowedContract {
         userTokenBalances[user][opt] = amount;
    }
+
+    function setUserCollateralDeposits(address user, uint256 amount) external onlyAllowedContract {
+        userDepositsCollateralObserver[user] = amount;
+    }
+
+    function setUserOptionDeposits(address user, uint256 opt, uint256 amount) external onlyAllowedContract {
+        userDepositsOptionObserver[user][opt] = amount;
+    }
 
     /* <<===  GETTER FUNCTIONS  ===>> */
     function balanceOfUserOption(address user, uint256 optionId) external view returns (uint256) {
@@ -114,6 +140,14 @@ contract PMT is ERC1155, Ownable {
 
     function getBalanceOfCollateralPool() external view returns (uint256) {
         return collateralPoolBalance;
+    }
+
+    function getUserCollateralDeposits(address user) external view returns (uint256) {
+        return userDepositsCollateralObserver[user];
+    }
+
+    function getUserOptionDeposits(address user, uint256 opt) external view returns (uint256) {
+        return userDepositsOptionObserver[user][opt];
     }
 
     function getQuestion() external view returns (string memory) {

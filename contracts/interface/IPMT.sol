@@ -14,6 +14,9 @@ interface IPMT is IERC1155 {
 
     function mintHandler(uint256 opt, uint256 amount) external;
     function burnHandler(uint256 opt, uint256 amount) external;
+    function approveHandler(uint256 amount) external;
+    function redeemHandler(uint256 dy) external;
+    function depositHandler(uint256 amount) external;
 
     function split(uint256 collateralTokenId, uint256 amount, uint256[] calldata optionIds) external;
     function merge(uint256[] calldata optionIds, uint256 collateralTokenId, uint256 amount) external;
@@ -25,6 +28,8 @@ interface IPMT is IERC1155 {
     function balanceOfUserOption(address user, uint256 optionId) external view returns (uint256);
     function getBalanceOfOptionPool(uint256 optionId) external view returns (uint256);
     function getBalanceOfCollateralPool() external view returns (uint256);
+    function getUserCollateralDeposits(address user) external view returns (uint256);
+    function getUserOptionDeposits(address user, uint256 opt) external view returns (uint256);
 
     function getQuestion() external view returns (string memory);
 	function getOptions() external view returns (string[] memory);
@@ -32,4 +37,6 @@ interface IPMT is IERC1155 {
     function setBalanceOfOptionPool(uint256 opt, uint256 amount) external;
     function setBalanceCollateralPool(uint256 amount) external;
     function setUserTokenBalances(address user, uint256 opt, uint256 amount) external;
+    function setUserCollateralDeposits(address user, uint256 amount) external;
+    function setUserOptionDeposits(address user, uint256 opt, uint256 amount) external;
 }
