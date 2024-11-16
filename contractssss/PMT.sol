@@ -7,18 +7,15 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 import "hardhat/console.sol";
 
-
 contract PMT is ERC1155, Ownable {
     string public question;
     address public oracleAddress;
-    address public exchangeAddress;
     address public collateralToken;
     uint256 public collateralPoolBalance;
     uint256 public fee;
     uint256 public startDate;
     uint256 public executionDate;
     string[] public options;
-
     address public allowedContract;
     bool initLiquidityFlag = false;
 
@@ -32,7 +29,6 @@ contract PMT is ERC1155, Ownable {
     constructor(
         string memory _question,
         address _oracleAddress,
-        address _exchangeAddress,
         address _collateralToken,
         uint256 _fee,
         uint256 _startDate,
@@ -85,17 +81,17 @@ contract PMT is ERC1155, Ownable {
     }
 
     /* <<=== TRADING MANAGER ===>> */
-    // function mintHandler(uint256 opt, uint256 amount) external onlyAllowedContract {
-    //     require(opt > 0, "Invalid option ID");
-    //     _mint(address(this), opt, amount, "");
-    //     optionPoolBalances[opt] += amount; 
-    // }
+    function mintHandler(uint256 opt, uint256 amount) external onlyAllowedContract {
+        require(opt > 0, "Invalid option ID");
+        _mint(address(this), opt, amount, "");
+        optionPoolBalances[opt] += amount; 
+    }
  
-    // function burnHandler(uint256 opt, uint256 amount) external onlyAllowedContract {
-    //     require(opt > 0, "Invalid option ID");
-    //     _burn(address(this), opt, amount);
-    //     optionPoolBalances[opt] -= amount; 
-    // }
+    function burnHandler(uint256 opt, uint256 amount) external onlyAllowedContract {
+        require(opt > 0, "Invalid option ID");
+        _burn(address(this), opt, amount);
+        optionPoolBalances[opt] -= amount; 
+    }
 
     function depositCollateralHandler(uint256 amount) external onlyAllowedContract {
         require(
@@ -110,10 +106,17 @@ contract PMT is ERC1155, Ownable {
 
     function redeemHandler(uint256 dy) external onlyAllowedContract {
         require(
-            IERC20(collateralToken).transfer(msg.sender, dy),
+            IERC20(collateralToken).transferFrom(address(this), msg.sender, dy),
             "Collateral token transfer failed"
         );
     }
+
+    function transferETHToEOA(address payable recipient, uint256 amount) external payable {
+        require(address(this).balance >= amount, "Insufficient balance");
+        recipient.transfer(amount);
+    }
+
+
     /* <<===  SETTER FUNCTIONS  ===>> */
     function setBalanceOfOptionPool(uint256 opt, uint256 amount) external onlyAllowedContract {
         optionPoolBalances[opt] = amount;
@@ -164,39 +167,16 @@ contract PMT is ERC1155, Ownable {
         return userRedeemAmount[user];
     }
 
-    // function getQuestion() external view returns (string memory) {
-    //     return question;
-    // }
+    function getQuestion() external view returns (string memory) {
+        return question;
+    }
 
-    // function getOptions() external view returns (string[] memory) {
-    //     return options;
-    // }
+    function getOptions() external view returns (string[] memory) {
+        return options;
+    }
 
-    // function getCollateralToken() external view returns (address) {
-    //     return collateralToken;
-    // }
-
-    // function getFlag() external view returns (bool) {
-    //     return initLiquidityFlag;
-    // }
-
-    // function getExecDate() external view returns (uint256) {
-    //     return executionDate;
-    // }
-
-    function getAllData() external view returns (
-        string memory _question,
-        address _oracleAddress,
-        address _exchangeAddress,
-        address _collateralToken,
-        uint256 _collateralPoolBalance,
-        uint256 _fee,
-        uint256 _startDate,
-        uint256 _executionDate,
-        string[] memory _options,
-        bool _initLiquidityFlag
-    ) {
-        return (question, oracleAddress, exchangeAddress, collateralToken, collateralPoolBalance, fee, startDate, executionDate, options, initLiquidityFlag);
+    function getCollateralToken() external view returns (address) {
+        return collateralToken;
     }
 
     function onERC1155Received(

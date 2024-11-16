@@ -90,6 +90,7 @@ describe("Prediction Market Test.", function () {
 			await market.getBalanceOfOptionPool(2),
 		);
 		let dy1, dy2;
+		/* <<=== 購入 ===>> */
 		dy1 = await om.calculateOptionChange(await market.getAddress(), 1, buyAmount, true);
 		console.log(`dx(USDC):${buyAmount} ===> dy(opt1):${dy1[0]}`)
 
@@ -97,14 +98,19 @@ describe("Prediction Market Test.", function () {
 		// await erc20.approve(await om.getAddress(), buyAmount)
 		// console.log(await erc20.allowance(deployer.address, marketId[0]))
 		// console.log(await erc20.allowance(deployer.address, await om.getAddress()))
-		await market.depositHandler(50);
-		await market.depositHandler(150);
+		await market.depositCollateralHandler(50);
+		await market.depositCollateralHandler(150);
 		// console.log(await market.getUserDeposits(deployer.address))
 		await om.buyOption(marketId[0], 1, buyAmount)
 
 		// expect(await market.balanceOfUserOption(deployer.address, 1)).to.eq(dy1[0]);
 		// expect(await market.balanceOfUserOption(deployer.address, 2)).to.eq(initLPAmount);
 
+		/* <<=== 売却 ===>> */
+		// 1.optionのdeposit
+		// 2.deposit枚数を現在価格でusdcの枚数を算出
+		// 3.erc20にapprove
+		// 4.redeemの実行
 		dy2 = await om.calculateOptionChange(await market.getAddress(), 1, dy1[0], false);
 		console.log(`dx(opt1):${dy1[0]} ===> dy(USDC):${dy2[0]}`)
 
